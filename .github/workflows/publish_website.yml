@@ -77,9 +77,32 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Report deploy start to Rollouts
+        id: rollouts
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          CHANGE_MONITOR_ENV: github-pages
+          CHANGE_MONITOR_SERVICE: website
+          DEPLOY_VERSION: ${{ github.sha }}
+          CHANGE_MONITOR_ACTOR: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          bash .github/scripts/rollouts-reporter.sh bootstrap
+          bash .github/scripts/rollouts-reporter.sh start
       - name: Deploy to github pages
+        id: ship
         uses: JamesIves/github-pages-deploy-action@9d877eea73427180ae43cf98e8914934fe157a1a  # v4
         with:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: gh-pages # The branch the action should deploy to.
           FOLDER: website/build # The folder the action should deploy.
+      - name: Report deploy finish to Rollouts
+        if: always()
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          CHANGE_MONITOR_ENV: github-pages
+          CHANGE_MONITOR_SERVICE: website
+          DEPLOY_VERSION: ${{ github.sha }}
+          CHANGE_MONITOR_ACTOR: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ROLLOUTS_DEPLOYMENT: ${{ steps.rollouts.outputs.deployment }}
+          ROLLOUTS_OUTCOME: ${{ steps.ship.outcome }}
+        run: bash .github/scripts/rollouts-reporter.sh finish
