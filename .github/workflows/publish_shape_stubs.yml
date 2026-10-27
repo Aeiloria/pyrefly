@@ -26,15 +26,41 @@ jobs:
       url: https://pypi.org/p/pyrefly-shape-extensions
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+      contents: read
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
       - name: Download shape stubs dist
         uses: actions/download-artifact@v7
         with:
           name: shape-stubs-dist
           path: shape-stubs-dist
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Report deploy start to Rollouts
+        id: rollouts
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          CHANGE_MONITOR_ENV: pypi-shape-extensions
+          CHANGE_MONITOR_SERVICE: pyrefly-shape-extensions
+          DEPLOY_VERSION: ${{ github.sha }}
+          CHANGE_MONITOR_ACTOR: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          bash .github/scripts/rollouts-reporter.sh bootstrap
+          bash .github/scripts/rollouts-reporter.sh start
       - name: Publish shape stubs to PyPI
+        id: ship
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # release/v1.14
         with:
           packages-dir: shape-stubs-dist
           skip-existing: false
+      - name: Report deploy finish to Rollouts
+        if: always()
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          CHANGE_MONITOR_ENV: pypi-shape-extensions
+          CHANGE_MONITOR_SERVICE: pyrefly-shape-extensions
+          DEPLOY_VERSION: ${{ github.sha }}
+          CHANGE_MONITOR_ACTOR: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ROLLOUTS_DEPLOYMENT: ${{ steps.rollouts.outputs.deployment }}
+          ROLLOUTS_OUTCOME: ${{ steps.ship.outcome }}
+        run: bash .github/scripts/rollouts-reporter.sh finish
